@@ -1,0 +1,1033 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Blackjack Strategy Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: rule sheet on the left like a dealer's rules placard, results on the right; stacks on phones. */
+:root {
+  --bg: #eef2ef; --panel: #ffffff; --ink: #14201a; --muted: #5a6a61; --line: #d5ddd8; --soft: #f5f8f6;
+  --accent: #0d6a44; --accent-ink: #ffffff; --focus: #0d6a44;
+  --h-bg: #f5cdc7; --h-fg: #6a1c13;
+  --s-bg: #f6e2a0; --s-fg: #574100;
+  --d-bg: #bfe5cb; --d-fg: #0a4629;
+  --ds-bg: #93d3ad; --ds-fg: #08391f;
+  --p-bg: #cbd7f6; --p-fg: #1a2c66;
+  --r-bg: #bfb0dc; --r-fg: #2e2248;
+  --field-line: #8a9a91;
+  --good: #0d6a44; --bad: #a3271a;
+  --f-display: "Familjen Grotesk", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0c1310; --panel: #131d18; --ink: #e5eee9; --muted: #92a299; --line: #26342d; --soft: #18241e;
+  --accent: #3dbd85; --accent-ink: #06140d; --focus: #3dbd85;
+  --h-bg: #5a2520; --h-fg: #ffd9d3; --s-bg: #4d3e12; --s-fg: #fbe8ad;
+  --d-bg: #1c4932; --d-fg: #c9f2d7; --ds-bg: #27613f; --ds-fg: #dcf8e5;
+  --p-bg: #24325e; --p-fg: #d4deff; --r-bg: #4a3a6a; --r-fg: #ede6fa; --field-line: #4d6157;
+  --good: #4fd096; --bad: #ff8b7c; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0c1310; --panel: #131d18; --ink: #e5eee9; --muted: #92a299; --line: #26342d; --soft: #18241e;
+  --accent: #3dbd85; --accent-ink: #06140d; --focus: #3dbd85;
+  --h-bg: #5a2520; --h-fg: #ffd9d3; --s-bg: #4d3e12; --s-fg: #fbe8ad;
+  --d-bg: #1c4932; --d-fg: #c9f2d7; --ds-bg: #27613f; --ds-fg: #dcf8e5;
+  --p-bg: #24325e; --p-fg: #d4deff; --r-bg: #4a3a6a; --r-fg: #ede6fa; --field-line: #4d6157;
+  --good: #4fd096; --bad: #ff8b7c; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.5; }
+.wrap { max-width: 1320px; margin: 0 auto; padding-block: 20px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: 1.7rem; font-weight: 700; }
+h2 { font-size: 1.15rem; font-weight: 600; }
+h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+h3 .hint { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+header.top { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-end; justify-content: space-between; margin-bottom: 18px; }
+.tag { color: var(--muted); max-width: 60ch; margin: 4px 0 0; }
+.edge-card { display: flex; gap: 24px; align-items: flex-end; flex-wrap: wrap; }
+.edge-big { font-family: var(--f-mono); font-size: 2.3rem; font-weight: 600; line-height: 1; }
+.edge-big.loading { font-family: var(--f-body); font-size: 1.4rem; color: var(--muted); }
+.edge-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.shorthand { font-family: var(--f-mono); font-size: 0.8rem; color: var(--muted); max-width: 46ch; }
+
+.layout { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } .main { order: -1; } }
+.jump { display: none; }
+@media (max-width: 900px) { .jump { display: inline; } }
+
+.rules { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 18px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); max-height: calc(100vh - 24px); overflow: auto; overscroll-behavior: contain; }
+@media (max-width: 900px) { .rules { position: static; max-height: none; } }
+fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; }
+legend { padding: 0; margin-bottom: 6px; }
+.field { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+.field label { color: var(--ink); }
+.field select { min-width: 0; max-width: 170px; padding: 5px 8px; border: 1px solid var(--field-line); border-radius: 6px; background: var(--soft); }
+.check { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.check input { margin-top: 3px; accent-color: var(--accent); }
+.hint { color: var(--muted); font-size: 0.78rem; }
+.preset select { width: 100%; max-width: none; padding: 7px 10px; font-weight: 600; }
+
+.main { min-width: 0; display: grid; gap: 16px; }
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+.tab { background: none; border: 0; padding: 9px 14px; border-bottom: 2px solid transparent; cursor: pointer; color: var(--muted); font-weight: 600; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
+.status { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; color: var(--muted); font-size: 0.85rem; min-height: 22px; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 6px; }
+.main[aria-busy="true"] .panel.result { opacity: .5; pointer-events: none; transition: opacity .2s; }
+.bar { flex: 1; height: 6px; background: var(--soft); border-radius: 3px; overflow: hidden; max-width: 260px; }
+.bar > i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .15s; }
+
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(330px, 100%), 1fr)); gap: 22px; }
+.charts > * { min-width: 0; }
+.tablewrap { overflow-x: auto; }
+table.chart { border-collapse: separate; border-spacing: 2px; font-family: var(--f-mono); font-size: 0.78rem; width: 100%; }
+table.chart th { font-weight: 600; color: var(--muted); padding: 3px 2px; text-align: center; }
+table.chart th.row { text-align: right; padding-right: 8px; white-space: nowrap; color: var(--ink); }
+table.chart td { padding: 0; }
+table.chart td button { width: 100%; min-width: 30px; height: 26px; border: 0; border-radius: 3px; cursor: pointer; font-weight: 600; font-family: var(--f-mono); font-size: 0.78rem; position: relative; }
+table.chart td button.sel { outline: 2px solid var(--ink); outline-offset: 1px; }
+table.chart td button.mixed::after { content: ""; position: absolute; top: 3px; right: 3px; width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .75; }
+.c-H { background: var(--h-bg); color: var(--h-fg); }
+.c-S { background: var(--s-bg); color: var(--s-fg); }
+.c-D { background: var(--d-bg); color: var(--d-fg); }
+.c-Ds { background: var(--ds-bg); color: var(--ds-fg); }
+.c-P { background: var(--p-bg); color: var(--p-fg); }
+.c-R { background: var(--r-bg); color: var(--r-fg); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 0.8rem; color: var(--muted); margin-top: 14px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend b { font-family: var(--f-mono); padding: 1px 6px; border-radius: 3px; font-size: 0.75rem; }
+.legend .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); display: inline-block; }
+.badge { font-family: var(--f-body); font-size: 0.7rem; font-weight: 700; color: var(--accent-ink); background: var(--accent); border-radius: 3px; padding: 0 5px; margin-left: 6px; }
+
+.detail { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; display: grid; gap: 12px; }
+table.ev { border-collapse: collapse; font-size: 0.85rem; width: 100%; }
+table.ev th, table.ev td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+table.ev th:first-child, table.ev td:first-child { text-align: left; }
+table.ev th { color: var(--muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }
+table.ev td.best { font-weight: 700; }
+.pos { color: var(--good); } .neg { color: var(--bad); }
+
+.cards { display: flex; flex-wrap: wrap; gap: 6px; }
+.rank { width: 40px; height: 44px; border: 1px solid var(--line); border-radius: 6px; background: var(--soft); font-family: var(--f-display); font-weight: 700; font-size: 1.05rem; cursor: pointer; }
+.rank[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.hand { display: flex; gap: 6px; flex-wrap: wrap; min-height: 58px; align-items: center; }
+.pc { width: 42px; height: 58px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); display: grid; place-items: center; font-family: var(--f-display); font-weight: 700; font-size: 1.25rem; cursor: pointer; box-shadow: 0 1px 0 var(--line); }
+.pc:hover { border-color: var(--bad); }
+.an-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 22px; }
+.stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-content: start; }
+.btn { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 6px; padding: 8px 14px; font-weight: 600; cursor: pointer; }
+.btn.ghost { background: var(--soft); color: var(--ink); border: 1px solid var(--line); }
+.btn:disabled { opacity: .5; cursor: default; }
+.shoe { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; }
+.shoe div { display: grid; gap: 2px; justify-items: center; background: var(--soft); border: 1px solid var(--line); border-radius: 6px; padding: 6px 2px; }
+.shoe span { font-family: var(--f-display); font-weight: 700; }
+.shoe .ctr { display: flex; gap: 4px; align-items: center; }
+.shoe button { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); cursor: pointer; line-height: 1; }
+.verdict { font-family: var(--f-display); font-size: 1.35rem; font-weight: 700; }
+.dbars { display: grid; gap: 4px; }
+.dbar { display: grid; grid-template-columns: 70px minmax(0, 1fr) 62px; gap: 8px; align-items: center; font-size: 0.8rem; }
+.dbar .track { height: 10px; background: var(--soft); border-radius: 2px; overflow: hidden; }
+.dbar .track i { display: block; height: 100%; background: var(--accent); }
+.dbar .track i.bust { background: var(--muted); }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); gap: 12px; }
+.kpi { background: var(--soft); border-radius: 8px; padding: 10px 12px; }
+.kpi .v { font-family: var(--f-mono); font-size: 1.25rem; font-weight: 600; }
+.kpi .l { font-size: 0.75rem; color: var(--muted); }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.row select, .row input { padding: 6px 8px; border: 1px solid var(--field-line); border-radius: 6px; background: var(--soft); }
+.impact { display: grid; gap: 6px; }
+.imp { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 80px; gap: 10px; align-items: center; font-size: 0.85rem; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.imp .axis { position: relative; height: 12px; background: var(--soft); border-radius: 2px; }
+.imp .axis::before { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--muted); }
+.imp .axis i { position: absolute; top: 0; height: 100%; border-radius: 2px; }
+.odds { display: grid; gap: 12px; border-top: 1px solid var(--line); padding-top: 14px; margin-top: 4px; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--field-line); border-radius: 7px; overflow: hidden; }
+.seg button { border: 0; background: var(--soft); padding: 6px 11px; cursor: pointer; font-weight: 600; font-size: 0.82rem; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.wpl { display: flex; height: 16px; border-radius: 4px; overflow: hidden; background: var(--soft); }
+.wpl i { display: block; height: 100%; }
+.w { background: var(--good); } .p { background: var(--muted); } .l { background: var(--bad); }
+.wpl-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.85rem; }
+.wpl-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+table.oddsT td { text-align: left; }
+.ob { display: grid; grid-template-columns: minmax(40px, 1fr) 58px; gap: 8px; align-items: center; min-width: 120px; }
+.ob .track { height: 9px; background: var(--soft); border-radius: 2px; overflow: hidden; }
+.ob .track i { display: block; height: 100%; background: var(--accent); }
+.ob .track i.you { background: var(--p-fg); }
+.ob .track i.bust { background: var(--muted); }
+.ob .num { text-align: right; }
+.linkbtn { border: 0; background: none; color: var(--accent); font-weight: 600; cursor: pointer; padding: 0 4px; font-size: 0.8rem; text-decoration: underline; text-underline-offset: 2px; }
+.saved { display: grid; gap: 8px; }
+.saved input { min-width: 0; flex: 1; padding: 6px 8px; border: 1px solid var(--field-line); border-radius: 6px; background: var(--soft); }
+.saved .row { flex-wrap: nowrap; }
+.saved .btn { padding: 6px 12px; white-space: nowrap; }
+details.share summary { cursor: pointer; color: var(--muted); font-size: 0.82rem; }
+details.share[open] summary { margin-bottom: 8px; }
+.prose { max-width: 70ch; color: var(--muted); font-size: 0.88rem; }
+.prose p { margin: 0 0 8px; }
+.chart-tools { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 14px; }
+.chartcap { font-family: var(--f-mono); font-size: 0.8rem; color: var(--muted); min-height: 1.5em; margin: 10px 0 0; overflow-wrap: anywhere; }
+.copybox { width: 100%; min-height: 160px; margin-top: 8px; padding: 8px; font-family: var(--f-mono); font-size: 0.75rem; border: 1px solid var(--line); border-radius: 6px; background: var(--soft); white-space: pre; overflow: auto; resize: vertical; }
+.keys { font-size: 0.78rem; color: var(--muted); }
+.keys kbd { font-family: var(--f-mono); font-size: 0.72rem; padding: 0 4px; border: 1px solid var(--line); border-radius: 3px; background: var(--soft); color: var(--ink); }
+.rank.uptoggle { width: auto; height: auto; padding: 4px 10px; font-family: var(--f-body); font-weight: 600; font-size: 0.8rem; }
+@media (max-width: 480px) {
+  table.chart { border-spacing: 1px; }
+  table.chart td button { min-width: 0; font-size: 0.72rem; }
+  table.chart th.row { padding-right: 4px; }
+  .ob .track { display: none; }
+  .ob { grid-template-columns: 1fr; min-width: 0; }
+  table.ev th, table.ev td { padding: 6px 6px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Blackjack Strategy Lab</h1>
+      <p class="tag">Exact expected value for every hand against every dealer upcard, computed from the shoe for the rules you set. Change any rule and the strategy recalculates.</p>
+    </div>
+    <div class="edge-card">
+      <div>
+        <div class="edge-label" id="edgeLabel">House edge</div>
+        <div class="edge-big loading" id="edgeBig">Calculating…</div>
+      </div>
+      <div class="shorthand" id="shorthand"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="rules" id="rules" aria-label="Table rules">
+      <h3>Rule preset</h3>
+      <div class="field preset">
+        <select id="preset" aria-label="Rule preset"></select>
+      </div>
+      <div class="saved">
+        <div class="row"><input id="saveName" maxlength="40" placeholder="Name these rules" aria-label="Name for the saved rules"><button type="button" class="btn" id="saveBtn">Save</button></div>
+        <button type="button" class="btn ghost" id="delBtn" hidden>Delete saved rules</button>
+        <details class="share"><summary>Move rules to another device</summary>
+          <div class="saved">
+            <button type="button" class="btn ghost" id="copyCode">Copy rules code</button>
+            <div class="row"><input id="codeIn" placeholder="Paste a rules code" aria-label="Rules code"><button type="button" class="btn ghost" id="loadCode">Load</button></div>
+          </div>
+        </details>
+        <button type="button" class="btn ghost" id="resetRules">Reset to defaults (Las Vegas Strip)</button>
+        <p class="hint" id="saveMsg" aria-live="polite">Saved rules stay in this browser.</p>
+      </div>
+
+      <fieldset><legend><h3>Shoe</h3></legend>
+        <div class="field"><label for="decks">Decks</label>
+          <select id="decks"><option value="1">1</option><option value="2">2</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="8">8</option><option value="0">Infinite</option></select></div>
+        <div class="field"><label for="penetration">Penetration (simulator)</label>
+          <select id="penetration"><option value="0.5">50%</option><option value="0.65">65%</option><option value="0.75">75%</option><option value="0.85">85%</option></select></div>
+      </fieldset>
+
+      <fieldset><legend><h3>Dealer</h3></legend>
+        <div class="field"><label for="h17">Soft 17</label>
+          <select id="h17"><option value="0">Stands (S17)</option><option value="1">Hits (H17)</option></select></div>
+        <div class="field"><label for="holeCard">Hole card</label>
+          <select id="holeCard"><option value="peek">Peeks for BJ</option><option value="enhc">No hole card, lose all</option><option value="enhc_obo">No hole card, original bet only</option></select></div>
+        <label class="check"><input type="checkbox" id="dealer22Push"><span>Dealer 22 pushes</span></label>
+      </fieldset>
+
+      <fieldset><legend><h3>Payouts</h3></legend>
+        <div class="field"><label for="bjPay">Blackjack pays</label>
+          <select id="bjPay"><option value="2">2:1</option><option value="1.5">3:2</option><option value="1.4">7:5</option><option value="1.2">6:5</option><option value="1">1:1</option></select></div>
+        <label class="check"><input type="checkbox" id="insurance"><span>Insurance and even money offered</span></label>
+        <div class="field"><label for="charlie">Charlie (auto-win)</label>
+          <select id="charlie"><option value="0">Off</option><option value="5">5 cards</option><option value="6">6 cards</option><option value="7">7 cards</option></select></div>
+      </fieldset>
+
+      <fieldset><legend><h3>Doubling</h3></legend>
+        <div class="field"><label for="doubleRule">Double on</label>
+          <select id="doubleRule"><option value="any">Any two cards</option><option value="9-11">9, 10, 11</option><option value="10-11">10, 11</option><option value="11">11 only</option></select></div>
+        <label class="check"><input type="checkbox" id="das"><span>Double after split</span></label>
+        <label class="check"><input type="checkbox" id="doubleAnyCards"><span>Double on any number of cards</span></label>
+        <label class="check"><input type="checkbox" id="freeDouble"><span>Free doubles on hard 9, 10, 11 <span class="hint">(Free Bet)</span></span></label>
+      </fieldset>
+
+      <fieldset><legend><h3>Splitting</h3></legend>
+        <div class="field"><label for="maxHands">Split up to</label>
+          <select id="maxHands"><option value="1">No splitting</option><option value="2">2 hands</option><option value="3">3 hands</option><option value="4">4 hands</option><option value="6">6 hands</option><option value="8">8 hands</option></select></div>
+        <label class="check"><input type="checkbox" id="resplitAces"><span>Resplit aces</span></label>
+        <div class="field"><label for="splitAces">Split aces get</label>
+          <select id="splitAces"><option value="one">One card</option><option value="hit">Hit freely</option><option value="hitdouble">Hit and double</option></select></div>
+        <label class="check"><input type="checkbox" id="splitAceTenBJ"><span>A+10 after split pays as blackjack</span></label>
+        <label class="check"><input type="checkbox" id="freeSplit"><span>Free splits on all pairs except tens <span class="hint">(Free Bet)</span></span></label>
+      </fieldset>
+
+      <fieldset><legend><h3>Surrender</h3></legend>
+        <div class="field"><label for="surrender">Surrender</label>
+          <select id="surrender"><option value="none">Not allowed</option><option value="late">Late (after peek)</option><option value="early">Early (before peek)</option></select></div>
+      </fieldset>
+    </aside>
+
+    <main class="main" id="main">
+      <div class="tabs" role="tablist" aria-label="Views">
+        <button class="tab" role="tab" id="tab-chart" aria-selected="true" aria-controls="view-chart" tabindex="0" data-view="chart">Strategy chart</button>
+        <button class="tab" role="tab" id="tab-analyzer" aria-selected="false" aria-controls="view-analyzer" tabindex="-1" data-view="analyzer">Hand analyzer</button>
+        <button class="tab" role="tab" id="tab-sim" aria-selected="false" aria-controls="view-sim" tabindex="-1" data-view="sim">Simulator</button>
+        <button class="tab" role="tab" id="tab-impact" aria-selected="false" aria-controls="view-impact" tabindex="-1" data-view="impact">Rule effects</button>
+      </div>
+      <div class="status" id="status"><span id="statusText" role="status">Starting…</span><div class="bar"><i id="statusBar"></i></div><a class="jump linkbtn" href="#rules">Change table rules</a></div>
+
+      <section class="panel result" id="view-chart" role="tabpanel" aria-labelledby="tab-chart" tabindex="0">
+        <div class="charts">
+          <div><h2>Hard totals</h2><div class="tablewrap"><table class="chart" id="hardTable"></table></div></div>
+          <div class="stack" style="gap:22px">
+            <div><h2>Soft totals</h2><div class="tablewrap"><table class="chart" id="softTable"></table></div></div>
+            <div><h2>Pairs</h2><div class="tablewrap"><table class="chart" id="pairTable"></table></div></div>
+          </div>
+        </div>
+        <div class="legend">
+          <span><b class="c-H">H</b>Hit</span><span><b class="c-S">S</b>Stand</span>
+          <span><b class="c-D">D</b>Double, else hit</span><span><b class="c-Ds">Ds</b>Double, else stand</span>
+          <span><b class="c-P">P</b>Split</span><span><b class="c-R">Rh</b>Surrender, else hit (Rs stand, Rp split)</span>
+          <span><i class="dot" aria-hidden="true"></i>Some card combinations of this total play differently. Select any cell for the numbers; arrow keys move between cells.</span>
+        </div>
+        <p class="chartcap" id="chartCap" aria-live="polite">Point at or focus a cell for its best action and margin.</p>
+        <div class="chart-tools"><button type="button" class="btn ghost" id="copyChart">Copy chart as text</button><span class="hint" id="copyChartMsg" aria-live="polite"></span></div>
+        <textarea class="copybox" id="chartText" readonly hidden aria-label="Strategy chart as text"></textarea>
+        <p class="hint" id="insNote"></p>
+        <div class="detail" id="detail"><p class="hint">Select a cell to see the expected value of every action.</p></div>
+      </section>
+
+      <section class="panel result" id="view-analyzer" role="tabpanel" aria-labelledby="tab-analyzer" tabindex="0" hidden>
+        <div class="an-grid">
+          <div class="stack">
+            <h3>Your hand <span class="hint">(select a card to remove it)</span></h3>
+            <div class="hand" id="anHand"></div>
+            <h3>Add a card</h3>
+            <div class="cards" id="anAdd" role="group" aria-label="Add a card to your hand"></div>
+            <div class="row"><button type="button" class="btn" id="anRandom">New random hand</button><button type="button" class="rank uptoggle" id="anUpMode" aria-pressed="false">Keys set upcard</button></div>
+            <p class="keys" id="anKeys">Keys: <kbd>A</kbd>/<kbd>1</kbd> ace, <kbd>2</kbd>–<kbd>9</kbd>, <kbd>0</kbd>/<kbd>T</kbd>/<kbd>J</kbd>/<kbd>Q</kbd>/<kbd>K</kbd> ten, <kbd>Backspace</kbd> remove last, <kbd>Esc</kbd> clear. Hold <kbd>Shift</kbd> (or use the toggle) to set the upcard.</p>
+            <h3 style="margin-top:8px" id="anUpLabel">Dealer upcard</h3>
+            <div class="cards" id="anUp" role="group" aria-labelledby="anUpLabel"></div>
+            <h3 style="margin-top:8px">Other cards already out of the shoe</h3>
+            <div class="shoe" id="anShoe"></div>
+            <div class="row"><button class="btn ghost" id="anClear">Reset removed cards</button><span class="hint" id="anShoeInfo" aria-live="polite"></span></div>
+          </div>
+          <div class="stack" id="anResult"></div>
+        </div>
+      </section>
+
+      <section class="panel result" id="view-sim" role="tabpanel" aria-labelledby="tab-sim" tabindex="0" hidden>
+        <div class="stack">
+          <p class="prose">Deals real shuffled shoes with the cut card at the penetration you set, plays every hand with the strategy computed for these rules, and compares the result with the exact calculation.</p>
+          <div class="row">
+            <label for="simN">Rounds</label>
+            <select id="simN"><option value="100000">100,000</option><option value="1000000" selected>1,000,000</option><option value="5000000">5,000,000</option><option value="20000000">20,000,000</option><option value="50000000">50,000,000</option><option value="100000000">100,000,000</option></select>
+            <button class="btn" id="simRun">Run simulation</button>
+            <button class="btn ghost" id="simStop" disabled>Stop</button>
+          </div>
+          <div id="simOut"></div>
+        </div>
+      </section>
+
+      <section class="panel result" id="view-impact" role="tabpanel" aria-labelledby="tab-impact" tabindex="0" hidden>
+        <div class="stack">
+          <p class="prose">Changes one rule at a time from your current table and recomputes the full game, so you can see what each rule is worth. Bars to the right help the player.</p>
+          <div class="row"><button class="btn" id="impRun">Measure rule effects</button><button class="btn ghost" id="impStop" disabled>Stop</button><span class="hint" id="impInfo" aria-live="polite">About 15 full calculations; roughly a minute for a 6-deck shoe, seconds for an infinite deck.</span></div>
+          <div class="impact" id="impOut"></div>
+        </div>
+      </section>
+
+      <section class="panel prose" aria-label="Method">
+        <h3 style="margin-bottom:8px">How it is calculated</h3>
+        <p>Every starting hand (55 card pairs, by exact composition) is solved against every upcard by recursing through every card that can still come out of the shoe, for you and for the dealer, with cards removed as they are dealt. Hard and soft cells show the probability-weighted result over all two-card hands with that total.</p>
+        <p>Every expected value shown is for the whole hand, so it already includes the chance that the dealer has blackjack (that is why surrender against a 10 shows about −54% rather than −50% with a peeking dealer). With a peeking dealer, decisions are made knowing the dealer does not have blackjack. With no hole card, dealer blackjack is part of the outcome and takes doubled and split bets unless "original bet only" is set. Split hands use the standard approximation: each one draws from the shoe with the pair and upcard removed. Free Bet hands are valued by their real stake, so a free hand that loses costs nothing.</p>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script src="engine.js"></script>
+<script>
+(function () {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const UPS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 1];
+  const RN = (c) => (c === 1 ? 'A' : String(c));
+  const pct = (v, d = 2) => (v >= 0 ? '+' : '−') + Math.abs(v * 100).toFixed(d) + '%';
+  const ACTION_NAMES = { stand: 'Stand', hit: 'Hit', double: 'Double', split: 'Split', surrender: 'Surrender' };
+
+  const PRESETS = {
+    strip: { name: 'Las Vegas Strip, 6 decks S17', r: { decks: 6, h17: false, holeCard: 'peek', bjPay: 1.5, doubleRule: 'any', das: true, doubleAnyCards: false, maxHands: 4, resplitAces: false, splitAces: 'one', surrender: 'late', charlie: 0, dealer22Push: false, freeDouble: false, freeSplit: false } },
+    h17: { name: 'Las Vegas, 6 decks H17', r: { decks: 6, h17: true, holeCard: 'peek', bjPay: 1.5, doubleRule: 'any', das: true, doubleAnyCards: false, maxHands: 4, resplitAces: true, splitAces: 'one', surrender: 'late', charlie: 0, dealer22Push: false, freeDouble: false, freeSplit: false } },
+    ac: { name: 'Atlantic City, 8 decks', r: { decks: 8, h17: false, holeCard: 'peek', bjPay: 1.5, doubleRule: 'any', das: true, doubleAnyCards: false, maxHands: 4, resplitAces: false, splitAces: 'one', surrender: 'late', charlie: 0, dealer22Push: false, freeDouble: false, freeSplit: false } },
+    dd: { name: 'Double deck H17', r: { decks: 2, h17: true, holeCard: 'peek', bjPay: 1.5, doubleRule: 'any', das: true, doubleAnyCards: false, maxHands: 4, resplitAces: false, splitAces: 'one', surrender: 'none', charlie: 0, dealer22Push: false, freeDouble: false, freeSplit: false } },
+    sd65: { name: 'Single deck 6:5', r: { decks: 1, h17: true, holeCard: 'peek', bjPay: 1.2, doubleRule: 'any', das: false, doubleAnyCards: false, maxHands: 4, resplitAces: false, splitAces: 'one', surrender: 'none', charlie: 0, dealer22Push: false, freeDouble: false, freeSplit: false } },
+    euro: { name: 'European, no hole card', r: { decks: 6, h17: false, holeCard: 'enhc', bjPay: 1.5, doubleRule: '9-11', das: true, doubleAnyCards: false, maxHands: 3, resplitAces: false, splitAces: 'one', surrender: 'none', charlie: 0, dealer22Push: false, freeDouble: false, freeSplit: false } },
+    freebet: { name: 'Free Bet Blackjack', r: { decks: 6, h17: true, holeCard: 'peek', bjPay: 1.5, doubleRule: 'any', das: true, doubleAnyCards: false, maxHands: 4, resplitAces: false, splitAces: 'one', surrender: 'none', charlie: 0, dealer22Push: true, freeDouble: true, freeSplit: true } }
+  };
+
+  for (const k in PRESETS) PRESETS[k].r.splitAceTenBJ = false;
+
+  const FIELDS = ['decks', 'penetration', 'h17', 'holeCard', 'dealer22Push', 'bjPay', 'insurance', 'charlie', 'doubleRule', 'das', 'doubleAnyCards', 'freeDouble', 'maxHands', 'resplitAces', 'splitAces', 'splitAceTenBJ', 'freeSplit', 'surrender'];
+  const NUMERIC = { decks: 1, penetration: 1, bjPay: 1, charlie: 1, maxHands: 1 };
+
+  function readRules() {
+    const r = {};
+    for (const f of FIELDS) {
+      const el = $(f);
+      if (el.type === 'checkbox') r[f] = el.checked;
+      else if (f === 'h17') r[f] = el.value === '1';
+      else r[f] = NUMERIC[f] ? Number(el.value) : el.value;
+    }
+    return r;
+  }
+  // Writes rules into the form; values the form can't show are skipped and returned by name.
+  function writeRules(r) {
+    const bad = [];
+    const truthy = (x) => x === true || x === 1 || x === '1' || x === 'true';
+    for (const f of FIELDS) {
+      if (r[f] === undefined) continue;
+      const el = $(f);
+      if (el.type === 'checkbox') { el.checked = truthy(r[f]); continue; }
+      const s = f === 'h17' ? (truthy(r[f]) ? '1' : '0') : String(r[f]);
+      if (Array.from(el.options).some((o) => o.value === s)) el.value = s; else bad.push(f);
+    }
+    return bad;
+  }
+  function shorthand(r) {
+    const s = [];
+    s.push(r.decks ? r.decks + (r.decks === 1 ? ' deck' : ' decks') : 'Infinite deck');
+    s.push(r.h17 ? 'H17' : 'S17');
+    s.push('BJ ' + ({ 2: '2:1', 1.5: '3:2', 1.4: '7:5', 1.2: '6:5', 1: '1:1' }[r.bjPay] || r.bjPay));
+    s.push(r.holeCard === 'peek' ? 'Peek' : r.holeCard === 'enhc' ? 'ENHC' : 'ENHC OBO');
+    s.push('Double ' + (r.doubleRule === 'any' ? 'any 2' : r.doubleRule));
+    if (r.das) s.push('DAS');
+    if (r.doubleAnyCards) s.push('Double any # cards');
+    s.push(r.maxHands > 1 ? 'Split to ' + r.maxHands : 'No split');
+    if (r.resplitAces) s.push('RSA');
+    if (r.splitAces !== 'one') s.push(r.splitAces === 'hit' ? 'HSA' : 'HSA+DSA');
+    if (r.surrender !== 'none') s.push(r.surrender === 'late' ? 'LS' : 'ES');
+    if (r.charlie) s.push(r.charlie + '-card Charlie');
+    if (r.dealer22Push) s.push('Push 22');
+    if (r.freeDouble) s.push('Free doubles');
+    if (r.freeSplit) s.push('Free splits');
+    if (r.splitAceTenBJ) s.push('Split A+10 = BJ');
+    return s.join(' · ');
+  }
+
+  // ---- job runner: time-sliced generators, cancellable ----
+  function runGen(gen, token, onProgress) {
+    return new Promise((resolve, reject) => {
+      function step() {
+        if (token.cancelled) return reject(new Error('cancelled'));
+        const t0 = performance.now();
+        let r;
+        try {
+          do { r = gen.next(); if (r.done) return resolve(r.value); } while (performance.now() - t0 < 28);
+        } catch (e) { return reject(e); }
+        if (onProgress) onProgress(r.value);
+        setTimeout(step, 0);
+      }
+      setTimeout(step, 0);
+    });
+  }
+
+  let state = { rules: null, engine: null, results: null, strat: null, ev: null, sel: null };
+  let calcToken = null;
+
+  function setStatus(text, frac) {
+    $('statusText').textContent = text;
+    $('statusBar').style.width = frac == null ? '0' : (frac * 100).toFixed(1) + '%';
+  }
+
+  async function recalc() {
+    const rules = readRules();
+    try { localStorage.setItem('bjlab.rules', JSON.stringify(rules)); } catch (e) {}
+    syncPreset(rules);
+    $('shorthand').textContent = shorthand(rules);
+    if (calcToken) calcToken.cancelled = true;
+    if (simToken) simToken.cancelled = true;
+    if (impToken) impToken.cancelled = true;
+    const token = calcToken = { cancelled: false };
+    const engine = BJ.createEngine(rules);
+    const t0 = performance.now();
+    setStatus('Solving 550 starting situations…', 0);
+    $('edgeBig').style.opacity = 0.45;
+    if (state.strat) $('main').setAttribute('aria-busy', 'true');
+    try {
+      const out = await runGen(engine.computeAll(), token, (p) => setStatus('Solving starting situations: ' + p.done + ' of ' + p.total, p.done / p.total));
+      state = { rules, engine, results: out.results, strat: BJ.buildStrategy(out.results), ev: out.ev, sel: state.sel };
+      const secs = ((performance.now() - t0) / 1000).toFixed(1);
+      setStatus('Solved in ' + secs + ' s. ' + (rules.decks ? (rules.decks * 52) + '-card shoe' : 'Infinite deck') + '.', 1);
+      $('main').removeAttribute('aria-busy');
+      renderEdge(); renderCharts(); renderDetail(); renderAnalyzer(); resetSimOut(); $('impOut').innerHTML = ''; $('impInfo').textContent = '';
+    } catch (e) {
+      if (e.message !== 'cancelled') { setStatus('Calculation failed: ' + e.message, null); console.error(e); $('main').removeAttribute('aria-busy'); $('edgeBig').style.opacity = 1; }
+    }
+  }
+
+  function renderEdge() {
+    const he = -state.ev;
+    $('edgeBig').style.opacity = 1;
+    $('edgeBig').textContent = (he < 0 ? '−' : '') + Math.abs(he * 100).toFixed(3) + '%';
+    $('edgeBig').className = 'edge-big' + (he < 0 ? ' pos' : '');
+    $('edgeLabel').textContent = he < 0 ? 'Player advantage (house edge below zero)' : 'House edge, optimal play';
+    const r = state.rules;
+    if (r.insurance) {
+      const D = r.decks;
+      const p = D ? (16 * D) / (52 * D - 1) : 16 / 52;
+      const ev = p * 2 - (1 - p);
+      $('insNote').textContent = 'Insurance and even money: never take them without counting. With only the ace seen, insurance returns ' + pct(ev) + ' of the insurance bet. The hand analyzer gives the exact value for any situation.';
+    } else $('insNote').textContent = 'Insurance is not offered at this table.';
+  }
+
+  function cellClass(code) { return 'c-' + (code[0] === 'R' ? 'R' : code); }
+  function chartTable(el, table, rows, label, kind) {
+    let h = '<thead><tr><th></th>' + UPS.map((u) => '<th scope="col">' + RN(u) + '</th>').join('') + '</tr></thead><tbody>';
+    for (const row of rows) {
+      if (!table[row]) continue;
+      h += '<tr><th class="row" scope="row">' + label(row) + '</th>';
+      for (const u of UPS) {
+        const c = table[row][u];
+        const sel = state.sel && state.sel.kind === kind && state.sel.row === row && state.sel.u === u;
+        const sum = cellSummary(c, kind);
+        h += '<td><button type="button" class="' + cellClass(c.code) + (c.mixed ? ' mixed' : '') + (sel ? ' sel' : '') + '" data-kind="' + kind + '" data-row="' + row + '" data-u="' + u + '" tabindex="-1" aria-pressed="' + sel + '" title="' + label(row) + ' v ' + RN(u) + ': ' + sum + '" aria-label="' + label(row) + ' against ' + RN(u) + ': ' + codeName(c.code) + '. ' + sum + '">' + c.code + '</button></td>';
+      }
+      h += '</tr>';
+    }
+    el.innerHTML = h + '</tbody>';
+  }
+  const CODE_NAMES = { H: 'hit', S: 'stand', D: 'double, else hit', Ds: 'double, else stand', P: 'split', Rh: 'surrender, else hit', Rs: 'surrender, else stand', Rp: 'surrender, else split' };
+  const codeName = (c) => CODE_NAMES[c] || c;
+  // One tab stop per table: the selected cell, or the first cell.
+  function fixTabStops() {
+    document.querySelectorAll('table.chart').forEach((t) => {
+      const b = t.querySelector('button.sel') || t.querySelector('td button');
+      if (b) b.tabIndex = 0;
+    });
+  }
+  document.querySelectorAll('table.chart').forEach((t) => t.addEventListener('keydown', (e) => {
+    const b = e.target.closest('td button');
+    if (!b) return;
+    const td = b.parentElement, tr = td.parentElement;
+    const ci = Array.prototype.indexOf.call(tr.children, td);
+    let target = null;
+    if (e.key === 'ArrowRight') target = td.nextElementSibling;
+    else if (e.key === 'ArrowLeft') target = td.previousElementSibling;
+    else if (e.key === 'ArrowDown' && tr.nextElementSibling) target = tr.nextElementSibling.children[ci];
+    else if (e.key === 'ArrowUp' && tr.previousElementSibling) target = tr.previousElementSibling.children[ci];
+    else if (e.key === 'Home') target = tr.children[1];
+    else if (e.key === 'End') target = tr.lastElementChild;
+    else return;
+    const nb = target && target.querySelector && target.querySelector('button');
+    e.preventDefault();
+    if (!nb) return;
+    b.tabIndex = -1; nb.tabIndex = 0; nb.focus();
+  }));
+  function renderCharts() {
+    const s = state.strat;
+    chartTable($('hardTable'), s.hard, range(5, 20).reverse().concat([4]).filter((x) => x !== 4), (r) => String(r), 'hard');
+    chartTable($('softTable'), s.soft, range(13, 20).reverse(), (r) => 'A,' + (r - 11), 'soft');
+    chartTable($('pairTable'), s.pair, [1, 10, 9, 8, 7, 6, 5, 4, 3, 2], (r) => RN(r) + ',' + RN(r), 'pair');
+    fixTabStops();
+  }
+  function range(a, b) { const o = []; for (let i = a; i <= b; i++) o.push(i); return o; }
+  // Best action EV and its margin over the runner-up, for the title and the caption under the tables.
+  function cellSummary(c, kind) {
+    const acts = Object.keys(c.acts).filter((k) => kind === 'pair' || k !== 'split').sort((a, b) => c.acts[b] - c.acts[a]);
+    if (!acts.length) return '';
+    let s = ACTION_NAMES[acts[0]] + ' ' + pct(c.acts[acts[0]]);
+    if (acts.length > 1) s += ', ' + ((c.acts[acts[0]] - c.acts[acts[1]]) * 100).toFixed(3) + ' pts over ' + ACTION_NAMES[acts[1]].toLowerCase();
+    return s;
+  }
+  function chartCaption(e) {
+    const b = e.target.closest && e.target.closest('table.chart button');
+    if (!b || !state.strat) return;
+    const kind = b.dataset.kind, row = Number(b.dataset.row), u = Number(b.dataset.u);
+    const c = state.strat[kind][row] && state.strat[kind][row][u];
+    if (!c) return;
+    const name = kind === 'hard' ? 'Hard ' + row : kind === 'soft' ? 'Soft ' + row : 'Pair ' + RN(row) + ',' + RN(row);
+    $('chartCap').textContent = name + ' v ' + RN(u) + ': ' + cellSummary(c, kind);
+  }
+  $('view-chart').addEventListener('mouseover', chartCaption);
+  $('view-chart').addEventListener('focusin', chartCaption);
+
+  // Plain-text grid of all three tables, rules shorthand on top.
+  function chartAsText() {
+    const s = state.strat, pad = (x, n) => (String(x) + ' '.repeat(n)).slice(0, n);
+    const head = (t) => pad(t, 6) + UPS.map((u) => pad(RN(u), 4)).join('').trimEnd();
+    const block = (title, table, rows, label) => {
+      const out = [head(title)];
+      for (const row of rows) if (table[row]) out.push(pad(label(row), 6) + UPS.map((u) => pad(table[row][u].code + (table[row][u].mixed ? '*' : ''), 4)).join('').trimEnd());
+      return out.join('\n');
+    };
+    return [
+      'Blackjack basic strategy: ' + shorthand(state.rules),
+      'House edge ' + (-state.ev * 100).toFixed(3) + '%. H hit, S stand, D double else hit, Ds double else stand, P split, Rh/Rs/Rp surrender else hit/stand/split. * some combinations differ.',
+      '',
+      block('Hard', s.hard, range(5, 20).reverse(), (r) => String(r)),
+      '',
+      block('Soft', s.soft, range(13, 20).reverse(), (r) => 'A,' + (r - 11)),
+      '',
+      block('Pairs', s.pair, [1, 10, 9, 8, 7, 6, 5, 4, 3, 2], (r) => RN(r) + ',' + RN(r))
+    ].join('\n');
+  }
+  $('copyChart').addEventListener('click', () => {
+    if (!state.strat) return;
+    const text = chartAsText(), box = $('chartText');
+    box.hidden = true;
+    const fallback = () => { box.value = text; box.hidden = false; box.focus(); box.select(); $('copyChartMsg').textContent = 'Copying was blocked. The chart is selected in the box below; copy it with Ctrl+C.'; };
+    try { navigator.clipboard.writeText(text).then(() => { $('copyChartMsg').textContent = 'Chart copied as text.'; }, fallback); } catch (e) { fallback(); }
+  });
+
+  document.addEventListener('click', (e) => {
+    const o = e.target.closest('[data-open]');
+    if (o) { const [a, b2, u] = o.dataset.open.split(',').map(Number); openInAnalyzer([a, b2], u); return; }
+    const b = e.target.closest('table.chart button');
+    if (!b) return;
+    state.sel = { kind: b.dataset.kind, row: Number(b.dataset.row), u: Number(b.dataset.u) };
+    document.querySelectorAll('table.chart button.sel').forEach((x) => { x.classList.remove('sel'); x.setAttribute('aria-pressed', 'false'); });
+    document.querySelectorAll('table.chart td button').forEach((x) => { x.tabIndex = -1; });
+    b.classList.add('sel'); b.setAttribute('aria-pressed', 'true');
+    fixTabStops();
+    renderDetail();
+  });
+
+  function evCell(v, best) { return '<td class="num' + (v === undefined ? '' : v >= 0 ? ' pos' : ' neg') + (best ? ' best' : '') + '">' + (v === undefined ? '—' : pct(v)) + '</td>'; }
+  function renderDetail() {
+    const el = $('detail');
+    if (!state.sel || !state.strat) { el.innerHTML = '<p class="hint">Select a cell to see the expected value of every action.</p>'; return; }
+    const { kind, row, u } = state.sel;
+    const cell = state.strat[kind][row] && state.strat[kind][row][u];
+    if (!cell) { el.innerHTML = '<p class="hint">Select a cell to see the expected value of every action.</p>'; return; }
+    const title = kind === 'hard' ? 'Hard ' + row : kind === 'soft' ? 'Soft ' + row + ' (A,' + (row - 11) + ')' : 'Pair of ' + (row === 1 ? 'aces' : RN(row) + 's');
+    const acts = Object.keys(cell.acts).filter((k) => kind === 'pair' || k !== 'split');
+    let best = acts[0]; for (const k of acts) if (cell.acts[k] > cell.acts[best]) best = k;
+    let h = '<div class="row" style="justify-content:space-between"><h2>' + title + ' against dealer ' + RN(u) + '</h2><span class="verdict ' + '">' + ACTION_NAMES[best] + '</span></div>';
+    h += '<p class="hint">Expected value per unit of the original bet. Each row is one two-card combination; the weighted average is what the chart shows.</p>';
+    h += '<div class="tablewrap"><table class="ev"><thead><tr><th>Cards</th><th>Share</th>' + acts.map((a) => '<th>' + ACTION_NAMES[a] + '</th>').join('') + '</tr></thead><tbody>';
+    const W = cell.items.reduce((s, it) => s + it.w, 0);
+    if (cell.items.length > 1) {
+      h += '<tr><td><b>Weighted average</b></td><td class="num">100%</td>' + acts.map((a) => evCell(cell.acts[a], a === best)).join('') + '</tr>';
+    }
+    for (const it of cell.items) {
+      let b2 = null; for (const a of acts) if (it.acts[a] !== undefined && (b2 === null || it.acts[a] > it.acts[b2])) b2 = a;
+      h += '<tr><td>' + RN(it.a) + ', ' + RN(it.b) + (b2 !== best ? ' <span class="hint">plays ' + ACTION_NAMES[b2].toLowerCase() + '</span>' : '') + ' <button type="button" class="linkbtn" data-open="' + it.a + ',' + it.b + ',' + u + '">Odds</button></td><td class="num">' + (W ? (it.w / W * 100).toFixed(1) : '—') + '%</td>' + acts.map((a) => evCell(it.acts[a], a === b2)).join('') + '</tr>';
+    }
+    h += '</tbody></table></div>';
+    const sorted = acts.slice().sort((a, b) => cell.acts[b] - cell.acts[a]);
+    if (sorted.length > 1) h += '<p class="hint">' + ACTION_NAMES[sorted[0]] + ' beats ' + ACTION_NAMES[sorted[1]].toLowerCase() + ' by ' + ((cell.acts[sorted[0]] - cell.acts[sorted[1]]) * 100).toFixed(3) + ' percentage points. Situation frequency: ' + (W * 100).toFixed(3) + '% of all initial deals.</p>';
+    el.innerHTML = h;
+  }
+
+  const payName = (x) => ({ 2: '2:1', 1.5: '3:2', 1.4: '7:5', 1.2: '6:5', 1: '1:1' }[x] || x + ' to 1');
+
+  // ---- analyzer ----
+  const an = { hand: [10, 6], up: 10, removed: new Array(11).fill(0), upMode: false };
+  const isRank = (c) => Number.isInteger(c) && c >= 1 && c <= 10;
+  try {
+    const s = JSON.parse(localStorage.getItem('bjlab.analyzer') || 'null');
+    if (s && Array.isArray(s.hand) && s.hand.length <= 9 && s.hand.every(isRank)) an.hand = s.hand;
+    if (s && isRank(s.up)) an.up = s.up;
+  } catch (e) {}
+  function saveAnalyzer() { try { localStorage.setItem('bjlab.analyzer', JSON.stringify({ hand: an.hand, up: an.up })); } catch (e) {} }
+  // Random card from a full shoe: tens are four times as likely as any other rank.
+  const randCard = () => { const x = Math.floor(Math.random() * 13) + 1; return x > 10 ? 10 : x; };
+  // Keyboard: A/1 ace, 2-9, 0/T/J/Q/K ten; Shift or the toggle sets the upcard. Uses e.code so Shift+digit still maps.
+  const KEYMAP = { KeyA: 1, KeyT: 10, KeyJ: 10, KeyQ: 10, KeyK: 10, Digit0: 10, Numpad0: 10 };
+  for (let i = 1; i <= 9; i++) { KEYMAP['Digit' + i] = i; KEYMAP['Numpad' + i] = i; }
+  document.addEventListener('keydown', (e) => {
+    if ($('view-analyzer').hidden || e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target;
+    if (t && (t.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName))) return;
+    let handled = true;
+    const c = KEYMAP[e.code];
+    if (c) {
+      if (e.shiftKey || an.upMode) an.up = c;
+      else if (an.hand.length < 9) an.hand.push(c);
+    } else if (e.key === 'Backspace') an.hand.pop();
+    else if (e.key === 'Escape') an.hand = [];
+    else handled = false;
+    if (!handled) return;
+    e.preventDefault();
+    an.oddsAction = null;
+    renderAnalyzer();
+  });
+  function buildAnalyzerControls() {
+    $('anAdd').innerHTML = UPS.map((c) => '<button type="button" class="rank" data-add="' + c + '" aria-label="Add ' + RN(c) + ' to your hand">' + RN(c) + '</button>').join('');
+    $('anUp').innerHTML = UPS.map((c) => '<button type="button" class="rank" data-up="' + c + '" aria-pressed="false">' + RN(c) + '</button>').join('');
+    $('anShoe').innerHTML = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((c) => '<div><span>' + RN(c) + '</span><div class="ctr"><button type="button" data-rm="' + c + '" data-d="-1" aria-label="Put back one ' + RN(c) + '">−</button><b class="num" id="rm' + c + '">0</b><button type="button" data-rm="' + c + '" data-d="1" aria-label="Remove one ' + RN(c) + '">+</button></div></div>').join('');
+    $('anAdd').addEventListener('click', (e) => { const b = e.target.closest('[data-add]'); if (!b) return; if (an.hand.length < 9) an.hand.push(Number(b.dataset.add)); renderAnalyzer(); });
+    $('anUp').addEventListener('click', (e) => { const b = e.target.closest('[data-up]'); if (!b) return; an.up = Number(b.dataset.up); renderAnalyzer(); });
+    $('anHand').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-i]'); if (!b) return;
+      const i = Number(b.dataset.i);
+      an.hand.splice(i, 1); renderAnalyzer();
+      const cards = $('anHand').querySelectorAll('[data-i]');
+      (cards[Math.min(i, cards.length - 1)] || $('anAdd').querySelector('button')).focus();
+    });
+    $('anShoe').addEventListener('click', (e) => { const b = e.target.closest('[data-rm]'); if (!b) return; const c = Number(b.dataset.rm); an.removed[c] = Math.max(0, an.removed[c] + Number(b.dataset.d)); renderAnalyzer(); });
+    $('anClear').addEventListener('click', () => { an.removed.fill(0); renderAnalyzer(); });
+    $('anRandom').addEventListener('click', () => { an.hand = [randCard(), randCard()]; an.up = randCard(); an.oddsAction = null; renderAnalyzer(); });
+    $('anUpMode').addEventListener('click', () => { an.upMode = !an.upMode; $('anUpMode').setAttribute('aria-pressed', String(an.upMode)); });
+    $('anResult').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-odds-act]'); if (!b) return;
+      an.oddsAction = b.dataset.oddsAct; renderAnalyzer();
+      const nb = $('anResult').querySelector('[data-odds-act="' + an.oddsAction + '"]'); if (nb) nb.focus();
+    });
+    [$('anAdd'), $('anUp'), $('anHand')].forEach((el) => el.addEventListener('click', () => { an.oddsAction = null; }, true));
+  }
+  function openInAnalyzer(cards, u) {
+    an.hand = cards.slice(); an.up = u; an.oddsAction = null;
+    showView('analyzer'); renderAnalyzer();
+    $('view-analyzer').scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
+  function renderAnalyzer() {
+    saveAnalyzer();
+    $('anHand').innerHTML = an.hand.length ? an.hand.map((c, i) => '<button type="button" class="pc" data-i="' + i + '" aria-label="Remove ' + RN(c) + '">' + RN(c) + '</button>').join('') : '<span class="hint">Add at least two cards.</span>';
+    document.querySelectorAll('#anUp [data-up]').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.up) === an.up)));
+    document.querySelectorAll('#anAdd [data-add]').forEach((b) => { b.disabled = an.hand.length >= 9; });
+    for (let c = 1; c <= 10; c++) $('rm' + c).textContent = an.removed[c];
+    const out = $('anResult');
+    if (!state.engine) { out.innerHTML = '<p class="hint">Waiting for the calculation…</p>'; return; }
+    const r = state.rules;
+    const totalRemoved = an.removed.reduce((a, b) => a + b, 0);
+    if (r.decks) {
+      const base = (c) => (c === 10 ? 16 : 4) * r.decks;
+      const used = new Array(11).fill(0); used[an.up]++; an.hand.forEach((c) => used[c]++);
+      for (let c = 1; c <= 10; c++) used[c] += an.removed[c];
+      const over = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].filter((c) => used[c] > base(c));
+      const left = r.decks * 52 - used.reduce((a, b) => a + b, 0);
+      let hilo = 0; for (let c = 1; c <= 10; c++) hilo += an.removed[c] * (c >= 2 && c <= 6 ? 1 : c === 1 || c === 10 ? -1 : 0);
+      $('anShoeInfo').textContent = over.length ? 'More ' + over.map(RN).join(', ') + ' removed than the shoe holds.' : left + ' cards left · Hi-Lo running count of removed cards ' + (hilo > 0 ? '+' : '') + hilo + ', true count ' + (hilo / Math.max(left / 52, 0.25)).toFixed(1);
+      if (over.length) { out.innerHTML = '<p class="hint">Fix the removed cards to continue.</p>'; return; }
+    } else $('anShoeInfo').textContent = totalRemoved ? 'An infinite deck ignores removed cards.' : 'Infinite deck: removing cards has no effect.';
+    if (an.hand.length < 2) { out.innerHTML = '<p class="hint">Add at least two cards to your hand.</p>'; return; }
+    const oc = state.engine.outcomes(an.hand.slice(), an.up, an.removed);
+    const res = oc.analysis;
+    let h = '';
+    const handName = (res.soft ? 'Soft ' : 'Hard ') + res.total;
+    if (res.bust) { out.innerHTML = '<div class="verdict neg">Bust (' + handName.replace(/^(Soft|Hard) /, '') + ')</div>'; return; }
+    if (res.natural) {
+      h += '<div class="verdict">Blackjack</div><p>Expected value ' + pct(res.actions.stand) + ' (paid ' + payName(r.bjPay) + ' unless the dealer also has blackjack).</p>';
+      if (res.evenMoney !== undefined) h += '<p>Even money is worth +100.00%. ' + (res.evenMoney > res.actions.stand ? 'Take even money.' : 'Decline even money: playing it out is worth ' + pct(res.actions.stand) + '.') + '</p>';
+    } else {
+      const acts = Object.keys(res.actions).sort((a, b) => res.actions[b] - res.actions[a]);
+      h += '<div class="row" style="justify-content:space-between"><div><h3>' + handName + ' against ' + RN(an.up) + '</h3><div class="verdict">' + ACTION_NAMES[acts[0]] + '</div></div>';
+      if (acts.length > 1) h += '<div class="hint" style="text-align:right"><b class="num">' + ((res.actions[acts[0]] - res.actions[acts[1]]) * 100).toFixed(2) + '</b> percentage points<br>better than ' + ACTION_NAMES[acts[1]].toLowerCase() + '</div>';
+      h += '</div><table class="ev"><thead><tr><th>Action</th><th>Expected value</th></tr></thead><tbody>';
+      for (const a of acts) {
+        let note = '';
+        if (a === 'double' && res.freeDouble) note = ' <span class="hint">free</span>';
+        if (a === 'split' && res.freeSplit) note = ' <span class="hint">free</span>';
+        h += '<tr><td>' + ACTION_NAMES[a] + note + (a === acts[0] ? '<span class="badge">Best</span>' : '') + '</td>' + evCell(res.actions[a], a === acts[0]) + '</tr>';
+      }
+      h += '</tbody></table>';
+      if (an.hand.length > 2) h += '<p class="hint">With three or more cards only stand, hit' + (r.doubleAnyCards ? ' and double' : '') + ' are possible.</p>';
+    }
+    if (res.insurance !== undefined) {
+      h += '<p><b>Insurance:</b> ' + pct(res.insurance) + ' per unit insured, with dealer blackjack probability ' + (res.pbj * 100).toFixed(2) + '%. ' + (res.insurance > 0 ? 'Take insurance.' : 'Decline insurance.') + '</p>';
+    }
+    h += renderOdds(oc, res);
+    out.innerHTML = h;
+  }
+
+  // Outcome odds: final totals for you and the dealer, and win / push / lose, for a chosen first action.
+  function renderOdds(oc, res) {
+    const r = state.rules;
+    const acts = Object.keys(oc.actions);
+    if (!acts.length) return '';
+    // Best playable action: surrender ends the hand, so it has no odds of its own.
+    let bestPlayable = acts[0];
+    for (const k of acts) if (res.actions[k] > res.actions[bestPlayable]) bestPlayable = k;
+    let a = an.oddsAction;
+    if (!acts.includes(a)) a = res.natural ? 'stand' : bestPlayable;
+    const o = oc.actions[a];
+    const peek = r.holeCard === 'peek', cond = r.holeCard !== 'enhc';
+    const pbj = oc.pbj;
+    const showBJ = an.up === 1 || an.up === 10;
+    const pct2 = (p) => (p * 100).toFixed(2) + '%';
+    let h = '<div class="odds"><div class="row" style="justify-content:space-between"><h2>Outcome odds</h2>';
+    if (!res.natural) {
+      h += '<div class="seg" role="group" aria-label="First action">' + acts.map((k) => '<button type="button" data-odds-act="' + k + '" aria-pressed="' + (k === a) + '">' + ACTION_NAMES[k] + (k === bestPlayable ? ' ★' : '') + '</button>').join('') + '</div>';
+    }
+    h += '</div>';
+    if (!res.natural && res.best === 'surrender') h += '<p class="hint">Surrender is the best play: you give up half your bet and the hand ends, so it has no odds to show. ★ marks the best way to play the hand instead.</p>';
+    // win / push / lose
+    h += '<div class="wpl" role="img" aria-label="Win ' + pct2(o.w) + ', push ' + pct2(o.p) + ', lose ' + pct2(o.l) + '"><i class="w" style="width:' + (o.w * 100) + '%"></i><i class="p" style="width:' + (o.p * 100) + '%"></i><i class="l" style="width:' + (o.l * 100) + '%"></i></div>';
+    h += '<div class="wpl-legend"><span><b class="sw w"></b>Win <b class="num">' + pct2(o.w) + '</b></span><span><b class="sw p"></b>Push <b class="num">' + pct2(o.p) + '</b></span><span><b class="sw l"></b>Lose <b class="num">' + pct2(o.l) + '</b></span></div>';
+    // totals table
+    const youScale = cond && !res.natural ? 1 - pbj : 1;
+    const d = oc.dealer;
+    const rows = [];
+    if (!res.natural) rows.push(['16 or less <span class="hint">(stood)</span>', o.tot[0] * youScale, null]);
+    for (let t = 17; t <= 21; t++) rows.push([String(t), res.natural && t === 21 ? null : o.tot[t - 16] * youScale, d[t - 17]]);
+    if (res.natural) rows.push(['Blackjack', 1, null]);
+    if (r.charlie && !res.natural) rows.push([r.charlie + '-card Charlie', o.tot[7] * youScale, null]);
+    rows.push(['Bust', res.natural ? null : o.tot[6] * youScale, d[5] + d[6]]);
+    if (r.dealer22Push) rows.push(['<span class="hint">of which 22, pushes</span>', null, d[5]]);
+    if (showBJ) rows.push(['Dealer blackjack' + (cond ? ' <span class="hint">(' + (peek ? 'ends the hand' : 'you lose only your original bet') + ')</span>' : ''), cond && !res.natural ? pbj : null, d[7]]);
+    const cellBar = (p, cls) => p === null ? '<td class="num hint">—</td>' : '<td><div class="ob"><div class="track"><i class="' + cls + '" style="width:' + (p * 100).toFixed(2) + '%"></i></div><span class="num">' + pct2(p) + '</span></div></td>';
+    h += '<div class="tablewrap"><table class="ev oddsT"><thead><tr><th>Final total</th><th>You</th><th>Dealer (' + RN(an.up) + ' up)</th></tr></thead><tbody>';
+    for (const [label, you, dl] of rows) h += '<tr><td>' + label + '</td>' + cellBar(you, 'you') + cellBar(dl, label === 'Bust' ? 'bust' : '') + '</tr>';
+    h += '</tbody></table></div>';
+    const notes = [];
+    if (res.natural) notes.push('Your blackjack wins unless the dealer also has one.');
+    else {
+      notes.push(a === 'stand' ? 'You stand now.' : a === 'hit' ? 'You hit now, then keep playing the best move on every card.' : a === 'double' ? 'You double now and get exactly one card' + (res.freeDouble ? ' (free double: only your original bet is at risk).' : ', so a win or loss counts twice.') : 'Odds for one of the split hands, playing the best move after the split. Resplits are not counted here.');
+      if (peek && showBJ) notes.push('The dealer checks for blackjack first, so your column only adds up to ' + pct2(1 - pbj) + '.');
+      if (cond && !peek && showBJ) notes.push('With no hole card and original bet only, a dealer blackjack costs just your first bet whatever you do, so it is shown separately and your column adds up to ' + pct2(1 - pbj) + '.');
+      if (!cond && showBJ) notes.push('With no hole card, a dealer blackjack still beats your hand after you play it, so it is counted under Lose.');
+    }
+    notes.push('Dealer totals use the cards shown here; the cards you draw change them very slightly.');
+    h += '<p class="hint">' + notes.join(' ') + '</p></div>';
+    return h;
+  }
+
+  // ---- simulator ----
+  let simToken = null;
+  function resetSimOut() { $('simOut').innerHTML = state.ev == null ? '' : '<p class="hint">Exact house edge for these rules: <b class="num">' + (-state.ev * 100).toFixed(3) + '%</b>. Run the simulation to check it against dealt shoes.</p>'; }
+  const fmtSecs = (s) => s < 60 ? s.toFixed(1) + ' s' : s < 3600 ? Math.floor(s / 60) + ' min ' + String(Math.floor(s % 60)).padStart(2, '0') + ' s' : Math.floor(s / 3600) + ' h ' + String(Math.floor((s % 3600) / 60)).padStart(2, '0') + ' min';
+  function simTiming(tm, done) {
+    if (!tm) return '';
+    const secs = (performance.now() - tm.t0) / 1000, n = tm.done;
+    const rps = secs > 0 ? n / secs : 0;
+    let s = 'Elapsed ' + fmtSecs(secs) + ' · ' + Math.round(rps).toLocaleString() + ' rounds per second';
+    if (!done && rps > 0 && n < tm.total) s += ' · about ' + fmtSecs((tm.total - n) / rps) + ' left';
+    return s + '.';
+  }
+  function renderSim(st, done, tm, ctx) {
+    ctx = ctx || { exact: -state.ev, rules: state.rules };
+    const n = st.rounds, m = st.sum / n;
+    const sd = Math.sqrt(Math.max(st.sumSq / n - m * m, 0));
+    const se = sd / Math.sqrt(n);
+    const exact = ctx.exact;
+    const z = Math.abs(-m - exact) / (se || 1);
+    const k = (label, v) => '<div class="kpi"><div class="v">' + v + '</div><div class="l">' + label + '</div></div>';
+    let h = '<div class="kpis">' +
+      k('Simulated house edge', (-m * 100).toFixed(3) + '%') +
+      k('95% interval', '± ' + (1.96 * se * 100).toFixed(3) + '%') +
+      k('Exact house edge', (exact * 100).toFixed(3) + '%') +
+      k('Rounds dealt', n.toLocaleString()) +
+      k('Rounds won / pushed / lost', (st.win / n * 100).toFixed(1) + ' / ' + (st.push / n * 100).toFixed(1) + ' / ' + (st.loss / n * 100).toFixed(1) + '%') +
+      k('Standard deviation per round', sd.toFixed(3)) +
+      k('Player blackjacks', (st.bj / n * 100).toFixed(2) + '%') +
+      k('Average real money wagered', st.wager / n === 0 ? '—' : (st.wager / n).toFixed(3) + '×') +
+      k('Doubles · splits per 100 rounds', (st.doubles / n * 100).toFixed(1) + ' · ' + (st.splits / n * 100).toFixed(1)) +
+      (ctx.rules.surrender !== 'none' ? k('Surrenders per 100 rounds', (st.surrenders / n * 100).toFixed(1)) : '') +
+      ((ctx.rules.freeDouble || ctx.rules.freeSplit) ? k('Free bets per 100 rounds', (st.freeBets / n * 100).toFixed(1)) : '') +
+      '</div>';
+    const diff = -m - exact, zs = se ? diff / se : 0;
+    h += '<p class="hint num" style="margin-top:10px">Compare to exact: simulated minus exact ' + (diff >= 0 ? '+' : '−') + Math.abs(diff * 100).toFixed(3) + ' pts = ' + (zs >= 0 ? '+' : '−') + Math.abs(zs).toFixed(2) + ' standard errors.</p>';
+    if (tm) h += '<p class="hint" id="simTime">' + simTiming(tm, done) + '</p>';
+    if (done) h += '<p class="hint" style="margin-top:10px">' + (z < 3 ? 'The simulation agrees with the exact calculation (difference ' + z.toFixed(1) + ' standard errors).' : 'The simulation differs by ' + z.toFixed(1) + ' standard errors. Part of a gap is expected: the simulator plays split and Free Bet hands from the chart rather than solving each one, and the cut card changes the shoe slightly.') + ' House edge here is per initial bet.</p>';
+    $('simOut').innerHTML = h;
+  }
+  $('simRun').addEventListener('click', async () => {
+    if (!state.strat) return;
+    if (simToken) simToken.cancelled = true;
+    const token = simToken = { cancelled: false };
+    const total = Number($('simN').value);
+    const ctx = { exact: -state.ev, rules: state.rules };
+    const sim = BJ.createSim(state.rules, state.strat, (Math.random() * 2 ** 32) >>> 0, state.engine);
+    function* gen() { let left = total; while (left > 0) { const k = Math.min(5000, left); sim.run(k); left -= k; yield total - left; } return sim.stats; }
+    $('simRun').disabled = true; $('simStop').disabled = false;
+    let last = 0;
+    const tm = { t0: performance.now(), done: 0, total };
+    try {
+      await runGen(gen(), token, (done) => { tm.done = done; setStatus('Simulating: ' + done.toLocaleString() + ' of ' + total.toLocaleString() + ' rounds', done / total); if (performance.now() - last > 250) { renderSim(sim.stats, false, tm, ctx); last = performance.now(); } });
+      tm.done = sim.stats.rounds; renderSim(sim.stats, true, tm, ctx); setStatus('Simulation finished.', 1);
+    } catch (e) {
+      tm.done = sim.stats.rounds;
+      if (state.rules === ctx.rules && sim.stats.rounds) renderSim(sim.stats, true, tm, ctx);
+      if (state.rules === ctx.rules) setStatus('Simulation stopped.', null);
+    }
+    $('simRun').disabled = false; $('simStop').disabled = true;
+  });
+  $('simStop').addEventListener('click', () => { if (simToken) simToken.cancelled = true; });
+  try { const n = localStorage.getItem('bjlab.simN'); if (n && $('simN').querySelector('option[value="' + Number(n) + '"]')) $('simN').value = String(Number(n)); } catch (e) {}
+  $('simN').addEventListener('change', () => { try { localStorage.setItem('bjlab.simN', $('simN').value); } catch (e) {} });
+
+  // ---- rule effects ----
+  function variants(r) {
+    const v = [];
+    const add = (label, ch) => v.push({ label, rules: Object.assign({}, r, ch) });
+    add(r.h17 ? 'Dealer stands on soft 17' : 'Dealer hits soft 17', { h17: !r.h17 });
+    add(r.bjPay === 1.5 ? 'Blackjack pays 6:5' : 'Blackjack pays 3:2', { bjPay: r.bjPay === 1.5 ? 1.2 : 1.5 });
+    add(r.das ? 'No double after split' : 'Double after split', { das: !r.das });
+    add(r.surrender === 'none' ? 'Late surrender' : 'No surrender', { surrender: r.surrender === 'none' ? 'late' : 'none' });
+    if (r.surrender !== 'early') add('Early surrender', { surrender: 'early' });
+    add(r.resplitAces ? 'No resplitting aces' : 'Resplit aces', { resplitAces: !r.resplitAces });
+    add(r.splitAces === 'one' ? 'Hit split aces' : 'One card on split aces', { splitAces: r.splitAces === 'one' ? 'hit' : 'one' });
+    add(r.maxHands > 2 ? 'Split to 2 hands only' : 'Split to 4 hands', { maxHands: r.maxHands > 2 ? 2 : 4 });
+    add(r.doubleRule === 'any' ? 'Double on 10, 11 only' : 'Double on any two cards', { doubleRule: r.doubleRule === 'any' ? '10-11' : 'any' });
+    add(r.doubleAnyCards ? 'Double on two cards only' : 'Double on any number of cards', { doubleAnyCards: !r.doubleAnyCards });
+    add(r.holeCard === 'peek' ? 'No hole card (lose all)' : 'Dealer peeks for blackjack', { holeCard: r.holeCard === 'peek' ? 'enhc' : 'peek' });
+    add(r.charlie ? 'No Charlie rule' : '5-card Charlie', { charlie: r.charlie ? 0 : 5 });
+    add(r.dealer22Push ? 'Dealer 22 busts normally' : 'Dealer 22 pushes', { dealer22Push: !r.dealer22Push });
+    if (r.decks !== 1) add('Single deck', { decks: 1 });
+    if (r.decks !== 8) add('8 decks', { decks: 8 });
+    return v;
+  }
+  let impToken = null;
+  $('impRun').addEventListener('click', async () => {
+    if (!state.strat) return;
+    if (impToken) impToken.cancelled = true;
+    const token = impToken = { cancelled: false };
+    const base = state.ev, list = variants(state.rules), done = [];
+    $('impRun').disabled = true; $('impStop').disabled = false;
+    try {
+      for (let i = 0; i < list.length; i++) {
+        $('impInfo').textContent = 'Solving ' + (i + 1) + ' of ' + list.length + ': ' + list[i].label;
+        const e = BJ.createEngine(list[i].rules);
+        const out = await runGen(e.computeAll(), token, (p) => setStatus('Rule effects: ' + (i + 1) + ' of ' + list.length, (i + p.done / p.total) / list.length));
+        done.push({ label: list[i].label, delta: out.ev - base });
+        renderImpact(done);
+      }
+      $('impInfo').textContent = 'Each row changes one rule from the current table.';
+      setStatus('Rule effects finished.', 1);
+    } catch (e) {
+      if (state.ev === base) { setStatus('Rule effects stopped.', null); $('impInfo').textContent = 'Stopped after ' + done.length + ' of ' + list.length + '.'; }
+    }
+    $('impRun').disabled = false; $('impStop').disabled = true;
+  });
+  $('impStop').addEventListener('click', () => { if (impToken) impToken.cancelled = true; });
+  function renderImpact(list) {
+    const max = Math.max(0.5, ...list.map((x) => Math.abs(x.delta * 100)));
+    const sorted = list.slice().sort((a, b) => b.delta - a.delta);
+    $('impOut').innerHTML = sorted.map((x) => {
+      const w = Math.abs(x.delta * 100) / max * 50;
+      const left = x.delta >= 0 ? 50 : 50 - w;
+      return '<div class="imp"><span>' + x.label + '</span><div class="axis"><i style="left:' + left + '%;width:' + w + '%;background:var(' + (x.delta >= 0 ? '--good' : '--bad') + ')"></i></div><span class="num ' + (x.delta >= 0 ? 'pos' : 'neg') + '" style="text-align:right">' + pct(x.delta, 3) + '</span></div>';
+    }).join('');
+  }
+
+  // ---- tabs ----
+  const VIEWS = ['chart', 'analyzer', 'sim', 'impact'];
+  function showView(v) {
+    if (!VIEWS.includes(v)) v = 'chart';
+    document.querySelectorAll('.tab').forEach((t) => { t.setAttribute('aria-selected', String(t.dataset.view === v)); t.tabIndex = t.dataset.view === v ? 0 : -1; });
+    ['chart', 'analyzer', 'sim', 'impact'].forEach((x) => { $('view-' + x).hidden = x !== v; });
+    try { localStorage.setItem('bjlab.view', v); } catch (e) {}
+  }
+  document.querySelector('.tabs').addEventListener('click', (e) => { const t = e.target.closest('.tab'); if (t) showView(t.dataset.view); });
+  document.querySelector('.tabs').addEventListener('keydown', (e) => {
+    const t = e.target.closest('.tab'); if (!t) return;
+    const i = VIEWS.indexOf(t.dataset.view);
+    let n = null;
+    if (e.key === 'ArrowRight') n = (i + 1) % VIEWS.length;
+    else if (e.key === 'ArrowLeft') n = (i + VIEWS.length - 1) % VIEWS.length;
+    else if (e.key === 'Home') n = 0;
+    else if (e.key === 'End') n = VIEWS.length - 1;
+    if (n === null) return;
+    e.preventDefault(); showView(VIEWS[n]); $('tab-' + VIEWS[n]).focus();
+  });
+
+  // ---- presets ----
+  // ---- saved rule sets (kept in this browser) ----
+  let saved = Object.create(null);
+  try {
+    const parsed = JSON.parse(localStorage.getItem('bjlab.saved') || '{}');
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      for (const k of Object.keys(parsed)) if (parsed[k] && typeof parsed[k] === 'object') saved[k] = parsed[k];
+    }
+  } catch (e) {}
+  function persistSaved() {
+    try { localStorage.setItem('bjlab.saved', JSON.stringify(saved)); return true; } catch (e) { return false; }
+  }
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const RULE_KEYS = FIELDS.filter((f) => f !== 'penetration');
+  const sameRules = (a, b) => RULE_KEYS.every((f) => a[f] === b[f]);
+  function buildPresetSelect() {
+    const names = Object.keys(saved).sort((a, b) => a.localeCompare(b));
+    let h = '<optgroup label="Common tables">' + Object.keys(PRESETS).map((k) => '<option value="' + k + '">' + PRESETS[k].name + '</option>').join('') + '</optgroup>';
+    if (names.length) h += '<optgroup label="Your saved rules">' + names.map((n) => '<option value="saved:' + esc(n) + '">' + esc(n) + '</option>').join('') + '</optgroup>';
+    h += '<option value="custom">Custom rules</option>';
+    $('preset').innerHTML = h;
+  }
+  function syncPreset(r) {
+    let match = 'custom';
+    for (const n in saved) if (sameRules(Object.assign({}, BJ.DEFAULT_RULES, saved[n]), r)) { match = 'saved:' + n; break; }
+    if (match === 'custom') for (const k in PRESETS) {
+      const p = PRESETS[k].r;
+      if (Object.keys(p).every((f) => p[f] === r[f])) { match = k; break; }
+    }
+    $('preset').value = match;
+    const isSaved = match.startsWith('saved:');
+    $('delBtn').hidden = !isSaved;
+    $('delBtn').textContent = 'Delete "' + (isSaved ? match.slice(6) : '') + '"';
+    $('delBtn').dataset.armed = '';
+  }
+  function saveMsg(t) { $('saveMsg').textContent = t; }
+  buildPresetSelect();
+  $('preset').addEventListener('change', () => {
+    const v = $('preset').value;
+    if (v.startsWith('saved:')) { const s = saved[v.slice(6)]; if (s) { writeRules(Object.assign(readRules(), s)); $('saveName').value = v.slice(6); schedule(); } return; }
+    const p = PRESETS[v]; if (p) { writeRules(Object.assign(readRules(), p.r)); schedule(); }
+  });
+  $('saveBtn').addEventListener('click', () => {
+    const name = $('saveName').value.trim();
+    if (!name) { saveMsg('Type a name first, for example "Casino Helsinki".'); $('saveName').focus(); return; }
+    const existed = Object.prototype.hasOwnProperty.call(saved, name);
+    saved[name] = readRules();
+    if (!persistSaved()) { saveMsg('This browser is blocking storage, so the rules could not be saved. Use "Copy rules code" instead.'); return; }
+    buildPresetSelect(); syncPreset(readRules());
+    saveMsg(existed ? 'Updated "' + name + '".' : 'Saved "' + name + '". Pick it from the list above any time.');
+  });
+  $('saveName').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('saveBtn').click(); });
+  $('delBtn').addEventListener('click', () => {
+    const v = $('preset').value; if (!v.startsWith('saved:')) return;
+    const name = v.slice(6), b = $('delBtn');
+    if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Select again to delete "' + name + '"'; return; }
+    delete saved[name]; persistSaved(); buildPresetSelect(); syncPreset(readRules());
+    saveMsg('Deleted "' + name + '". The table rules are unchanged.');
+  });
+  const DEFAULTS = () => Object.assign({}, BJ.DEFAULT_RULES, PRESETS.strip.r, { insurance: true, penetration: 0.75 });
+  $('resetRules').addEventListener('click', () => {
+    writeRules(DEFAULTS()); $('saveName').value = ''; schedule();
+    saveMsg('Rules reset to ' + PRESETS.strip.name + '. Saved rules are unchanged.');
+  });
+  function rulesCode(r) { const o = {}; for (const f of FIELDS) o[f] = r[f]; return 'BJ1.' + btoa(JSON.stringify(o)); }
+  $('copyCode').addEventListener('click', () => {
+    const code = rulesCode(readRules());
+    const fallback = () => { $('codeIn').value = code; $('codeIn').select(); saveMsg('Code selected in the box below. Copy it with Ctrl+C.'); };
+    try { navigator.clipboard.writeText(code).then(() => saveMsg('Rules code copied. Paste it into this page on any device.'), fallback); } catch (e) { fallback(); }
+  });
+  $('loadCode').addEventListener('click', () => {
+    const raw = $('codeIn').value.trim();
+    try {
+      if (!raw.startsWith('BJ1.')) throw new Error();
+      const o = JSON.parse(atob(raw.slice(4)));
+      if (!o || typeof o !== 'object') throw new Error();
+      const r = {}; for (const f of FIELDS) if (o[f] !== undefined) r[f] = o[f];
+      const bad = writeRules(r); schedule();
+      saveMsg(bad.length ? 'Rules loaded, except these settings, which this page does not support and left unchanged: ' + bad.join(', ') + '.' : 'Rules loaded. Name them above and select Save to keep them.');
+    } catch (e) { saveMsg('That code is not valid. It starts with "BJ1." and comes from "Copy rules code".'); }
+  });
+
+  let timer = null;
+  function schedule() { clearTimeout(timer); timer = setTimeout(recalc, 250); }
+  for (const f of FIELDS) {
+    if (f === 'penetration') { $(f).addEventListener('change', () => { if (state.rules) { state.rules.penetration = Number($(f).value); } try { localStorage.setItem('bjlab.rules', JSON.stringify(readRules())); } catch (e) {} }); continue; }
+    $(f).addEventListener('change', schedule);
+  }
+
+  // ---- boot ----
+  let lastRules = null;
+  try { lastRules = JSON.parse(localStorage.getItem('bjlab.rules') || 'null'); } catch (e) {}
+  writeRules(Object.assign(DEFAULTS(), lastRules || {}));
+  buildAnalyzerControls();
+  let v = 'chart'; try { v = localStorage.getItem('bjlab.view') || 'chart'; } catch (e) {}
+  const hash = (location.hash || '').slice(1);
+  if (VIEWS.includes(hash)) v = hash;
+  if (!VIEWS.includes(v)) v = 'chart';
+  showView(v);
+  state.sel = { kind: 'hard', row: 16, u: 10 };
+  recalc();
+})();
+</script>
